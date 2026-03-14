@@ -1,0 +1,137 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+}
+
+enum ComponentType {
+  QUIZ
+  MIDTERM
+  ENDSEM
+  ASSIGNMENT
+  PROJECT
+  OTHER
+}
+
+model User {
+  id             Int       @id @default(autoincrement())
+  userId         String    @unique @map("user_id")
+  name           String
+  email          String    @unique
+  role           Role
+  passwordHash   String    @map("password_hash")
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  lockedUntil    DateTime? @map("locked_until")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  taughtSections Section[]    @relation("InstructorSections")
+  enrollments    Enrollment[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+model Course {
+  id            Int      @id @default(autoincrement())
+  courseCode    String   @unique @map("course_code")
+  title         String
+  description   String?
+  credits       Int
+  prerequisites String[]
+
+  sections Section[]
+
+  @@map("courses")
+}
+
+model Section {
+  id           Int    @id @default(autoincrement())
+  courseId     Int    @map("course_id")
+  sectionCode  String @map("section_code")
+  instructorId Int?   @map("instructor_id")
+  room         String?
+  schedule     Json?
+  semester     String?
+  year         Int?
+  capacity     Int    @default(30)
+  enrolled     Int    @default(0)
+
+  course      Course          @relation(fields: [courseId], references: [id])
+  instructor  User?           @relation("InstructorSections", fields: [instructorId], references: [id])
+  enrollments Enrollment[]
+  components  GradeComponent[]
+
+  @@map("sections")
+}
+
+model Enrollment {
+  id         Int      @id @default(autoincrement())
+  studentId  Int      @map("student_id")
+  sectionId  Int      @map("section_id")
+  enrolledAt DateTime @default(now()) @map("enrolled_at")
+  dropped    Boolean  @default(false)
+
+  section Section @relation(fields: [sectionId], references: [id])
+  grades  Grade[]
+
+  @@unique([studentId, sectionId])
+  @@map("enrollments")
+}
+
+model GradeComponent {
+  id        Int           @id @default(autoincrement())
+  sectionId Int           @map("section_id")
+  name      String
+  type      ComponentType
+  maxMarks  Float         @map("max_marks")
+  weightage Float
+
+  section Section @relation(fields: [sectionId], references: [id])
+  grades  Grade[]
+
+  @@map("grade_components")
+}
+
+model Grade {
+  id            Int   @id @default(autoincrement())
+  enrollmentId  Int   @map("enrollment_id")
+  componentId   Int   @map("component_id")
+  marksObtained Float @map("marks_obtained")
+
+  enrollment Enrollment     @relation(fields: [enrollmentId], references: [id])
+  component  GradeComponent @relation(fields: [componentId], references: [id])
+
+  @@unique([enrollmentId, componentId])
+  @@map("grades")
+}
+
+model Setting {
+  key   String @id
+  value String
+
+  @@map("settings")
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  actorId   Int      @map("actor_id")
+  action    String
+  details   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  actor User @relation(fields: [actorId], references: [id])
+
+  @@map("audit_log")
+}
